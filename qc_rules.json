@@ -14,7 +14,7 @@
     "min": 2600,
     "standard_max": 3200,
     "hard_max": 3520,
-    "_note": "标准区间 2600-3200；超出 standard_max 但未超 hard_max（上浮 10%）只告警；超 hard_max 判未过。口径来源：projects/04_写作规范.md"
+    "_note": "标准区间 2600-3200；超出 standard_max 但未超 hard_max（上浮 10%）只告警；超 hard_max 判未过。本文件即口径来源，换书只改这里"
   },
   "title_words": 7,
 

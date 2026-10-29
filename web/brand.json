@@ -17,12 +17,12 @@
 
   "navLabel": "地基八档",
   "navDocs": [
-    { "path": "projects/穿越之我是杨广/01_总纲.md", "label": "总纲", "sub": "最高纲领" },
-    { "path": "projects/穿越之我是杨广/06_十卷提纲表.md", "label": "十卷提纲", "sub": "卷一至卷十" },
-    { "path": "projects/穿越之我是杨广/07_逐章大纲_前30章.md", "label": "逐章大纲", "sub": "001–030" },
-    { "path": "projects/穿越之我是杨广/02_人物剧集库.md", "label": "人物剧集", "sub": "七阵营" },
-    { "path": "projects/穿越之我是杨广/11_谋略体系库.md", "label": "谋略体系", "sub": "谋略五拍" },
-    { "path": "projects/穿越之我是杨广/04_写作规范.md", "label": "写作规范", "sub": "硬闸口径" }
+    { "path": "projects/00_规划层说明.md", "label": "规划层", "sub": "11 份文档分工" },
+    { "path": "01-题材锚定与考据清单.md", "label": "题材锚定", "sub": "Stage 0" },
+    { "path": "02-毒士主角人物卡模板.md", "label": "人物卡", "sub": "Stage 2" },
+    { "path": "03-文风编码prompt模板.md", "label": "文风编码", "sub": "Stage 1" },
+    { "path": "04-权谋关系网与伏笔矩阵.md", "label": "伏笔矩阵", "sub": "Stage 3" },
+    { "path": "05-质检清单（对接自进化控制台）.md", "label": "质检清单", "sub": "验收" }
   ],
 
   "platformDocs": [
@@ -33,11 +33,11 @@
   ],
 
   "quick": [
-    { "href": "#/manuscript", "label": "正文阅读", "desc": "已写章节 · 点读" },
+    { "href": "#/manuscript", "label": "正文阅读", "desc": "前 10 章样章 · 点读" },
     { "href": "#/chapters", "label": "章节看板", "desc": "逐章细纲 · 可标状态" },
-    { "path": "projects/穿越之我是杨广/01_总纲.md", "label": "总纲", "desc": "最高纲领 · 七矛盾轴" },
-    { "path": "projects/穿越之我是杨广/06_十卷提纲表.md", "label": "十卷提纲", "desc": "卷一至卷十 · 骨架" },
-    { "path": "projects/穿越之我是杨广/02_人物剧集库.md", "label": "人物剧集库", "desc": "七阵营人物弧线" },
-    { "path": "projects/穿越之我是杨广/04_写作规范.md", "label": "写作规范", "desc": "开局铁闸 · 硬闸口径" }
+    { "path": "projects/00_规划层说明.md", "label": "规划层说明", "desc": "11 份文档各写什么" },
+    { "path": "01-题材锚定与考据清单.md", "label": "题材锚定", "desc": "先定朝代与护栏" },
+    { "path": "04-权谋关系网与伏笔矩阵.md", "label": "伏笔矩阵", "desc": "凡埋必收" },
+    { "path": "05-质检清单（对接自进化控制台）.md", "label": "质检清单", "desc": "交稿前逐条过" }
   ]
 }

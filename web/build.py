@@ -40,14 +40,8 @@ GROUPS = [
         "05-质检清单（对接自进化控制台）.md",
         "06-顶流对标·范文提炼与拆解.md",
     ]),
-    ("project", "创作项目 · 规划层（精修正文配套）", [
-        "01_总纲.md",
-        "02_人物剧集库.md",
-        "04_写作规范.md",
-        "06_十卷提纲表.md",
-        "07_逐章大纲_前30章.md",
-        "07_逐章大纲_卷二_111-140.md",
-        "11_谋略体系库.md",
+    ("project", "创作项目 · 规划层（换书时填入你自己的文档）", [
+        "00_规划层说明.md",
     ]),
     ("benchmark", "对标基准包", [
         "benchmark/README_基准包索引.md",
@@ -223,12 +217,12 @@ def scan_manuscript():
 def build():
     files, groups = {}, []
     for gid, gname, plist in GROUPS:
-        base = PROJECT_ROOT if gid == "project" else ROOT
+        base = os.path.join(ROOT, "projects") if gid == "project" else ROOT
         gfiles = []
         for rel in plist:
             ab = os.path.join(base, rel.replace("/", os.sep))
-            # project 组的逻辑键统一加命名空间前缀，与前端路由约定一致
-            key = ("projects/穿越之我是杨广/" + rel) if gid == "project" else rel
+            # project 组的逻辑键统一加 projects/ 前缀，与前端路由约定一致
+            key = ("projects/" + rel) if gid == "project" else rel
             if not os.path.exists(ab):
                 sys.stderr.write("[WARN] missing: %s\n" % rel)
                 continue
