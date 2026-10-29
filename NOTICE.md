@@ -12,7 +12,7 @@
 
 适用：
 
-- `novel-source/` 下的全部正文章节
+- `novel-source/` 下的正文章节（仓库内为前 10 章样章，全稿不随仓库发布）
 - `web/data.js`、`docs/data.js` 中包含的正文内容
 - `projects/` 下的规划层文档（总纲、人物库、时间线、逐章大纲、伏笔表等）
 - `benchmark/` 下的对标拆解与文风向量
