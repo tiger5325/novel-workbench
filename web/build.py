@@ -334,23 +334,57 @@ def build():
     sync_docs(data)
 
 
+CH_SEC_RE = re.compile(r"^##\s+第(\d{3})章", re.M)
+
+
+def trim_outline_md(txt, limit):
+    """把逐章细纲类文档裁到前 limit 章，保留文件头说明与格式。
+    找不到「## 第NNN章」分节则原样返回（不是逐章细纲，不做处理）。"""
+    starts = [(m.start(), int(m.group(1))) for m in CH_SEC_RE.finditer(txt)]
+    if not starts:
+        return txt
+    head = txt[:starts[0][0]]
+    keep_end = len(txt)
+    for pos, ch in starts:
+        if ch > limit:
+            keep_end = pos
+            break
+    body = txt[starts[0][0]:keep_end].rstrip()
+    return (head + body +
+            "\n\n---\n\n> 公开发布版仅保留前 %d 章细纲，后续章节细纲未公开。\n" % limit)
+
+
 def sample_data(data, limit):
-    """从全量数据裁出样章版：正文只留前 limit 章，分组与统计同步重算。
-    规划层文档、对标包、细纲保持完整——它们是可复用的方法论样板，不是正文。"""
+    """从全量数据裁出样章版：正文只留前 limit 章，逐章细纲同步裁到 limit 章，
+    分组与统计重算。总纲 / 写作规范 / 谋略体系等结构性文档保持完整——
+    它们是可复用的方法论样板，不含逐章剧情。"""
     d = json.loads(json.dumps(data, ensure_ascii=False))
     if limit <= 0:
         return d
     chapters = [c for c in d.get("chapters", []) if int(c["ch"]) <= limit]
     keep = set(c["path"] for c in chapters)
-    files = dict((k, v) for k, v in d.get("files", {}).items()
-                 if (not k.startswith("manuscript/")) or (k in keep))
+    files, dropped = {}, set()
+    for k, v in d.get("files", {}).items():
+        if k.startswith("manuscript/") and k not in keep:
+            dropped.add(k)
+            continue
+        if "逐章大纲" in k and v.get("kind") == "md":
+            nc = trim_outline_md(v.get("content", ""), limit)
+            # 裁完一章都不剩的（例如整份都在 111 章之后）直接剔除，避免留下空壳
+            if not CH_SEC_RE.search(nc):
+                dropped.add(k)
+                continue
+            v = dict(v)
+            v["content"] = nc
+            v["bytes"] = len(nc.encode("utf-8"))
+        files[k] = v
     groups = []
     for g in d.get("groups", []):
-        if g.get("id") != "manuscript":
-            groups.append(g)
-            continue
-        fl = [p for p in g.get("files", []) if p in keep]
+        fl = [p for p in g.get("files", []) if p not in dropped]
         if not fl:
+            continue
+        if g.get("id") != "manuscript":
+            groups.append(dict(g, files=fl))
             continue
         vols = sorted(set(c.get("vol") or "" for c in chapters))
         vlabel = "、".join(v.split("_")[0] for v in vols if v)
@@ -362,6 +396,8 @@ def sample_data(data, limit):
     d["chapters"] = chapters
     d["files"] = files
     d["groups"] = groups
+    d["outline"] = dict((k, v) for k, v in d.get("outline", {}).items()
+                        if int(k) <= limit)
     d["sample"] = {"limit": limit, "chapterCount": len(chapters)}
     d["stats"] = {
         "fileCount": len(files),
@@ -369,7 +405,7 @@ def sample_data(data, limit):
         "mdBytes": sum(f.get("bytes", 0) for f in files.values() if f.get("kind") == "md"),
         "chapterCount": len(chapters),
         "totalWords": sum(c.get("words", 0) for c in chapters),
-        "outlineCount": d.get("stats", {}).get("outlineCount", len(d.get("outline", {}))),
+        "outlineCount": len(d["outline"]),
     }
     return d
 
