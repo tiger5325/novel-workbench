@@ -1,0 +1,6 @@
+# 生成物固定 LF。
+# build.py 用 LF 写盘；若检出时被 core.autocrlf 转成 CRLF，
+# 每次构建都会在工作区留下「内容没变、git 却说变了」的假 diff。
+# 只为生成物声明规则，避免对全部源文件做一次全库换行重写。
+web/data.js  text eol=lf
+docs/data.js text eol=lf

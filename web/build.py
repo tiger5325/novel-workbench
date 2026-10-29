@@ -313,7 +313,7 @@ def build():
                     data["generatedAt"] = ts_reuse.split('"')[3]
         except Exception:
             ts_reuse = None
-    with open(OUT, "w", encoding="utf-8") as f:
+    with open(OUT, "w", encoding="utf-8", newline="\n") as f:
         f.write(js)
     print("OK -> %s" % OUT)
     print("正文源: %s" % MS_ROOT)
