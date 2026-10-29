@@ -12,7 +12,9 @@ WEB = os.path.join(ROOT, "web")
 OUT = os.path.join(WEB, "data.js")
 
 # 真实项目根（规划层散文件 + 精修正文均在此，独立于工作台 ROOT）
-PROJECT_ROOT = os.path.join("F:", os.sep, "F05_Projects_Hub", "穿越之我是杨广")
+# 可用环境变量 NOVEL_PROJECT_ROOT 覆盖；默认取「工作台根目录的同级目录 / 穿越之我是杨广」
+PROJECT_ROOT = os.environ.get("NOVEL_PROJECT_ROOT") or os.path.join(
+    os.path.dirname(ROOT), "穿越之我是杨广")
 
 # 分组与排序（文件相对路径）
 GROUPS = [
@@ -45,12 +47,6 @@ GROUPS = [
         "benchmark/拆解实例_最强毒士_贪官赈灾一石三雕.json",
         "benchmark/拆解实例_庆余年_第12章.json",
         "benchmark/engine.py",
-    ]),
-    ("eval", "评审与测试证据", [
-        ".eval/rubric.md",
-        ".eval/rounds_log.md",
-        ".eval/test-evidence.md",
-        ".eval/dryrun-chapter1.md",
     ]),
 ]
 

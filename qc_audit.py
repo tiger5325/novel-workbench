@@ -46,7 +46,7 @@ v4 变更（2026-10-29 · 对标实测后收紧；闸门只对新章生效）：
   - projects/.../正文_重写稿/_生产/qc_audit_state.json
 
 用法：
-  python qc_audit.py [--root <项目根>] [--deep-seeded <已深度八轴审校章数>]
+  python qc_audit.py [--root <项目根>] [--deep-seeded <已深度全维审校章数>]
                      [--baseline 164] [--strict]
 退出码：默认 0（报告性质）；--strict 且有未过章时返回 1。
 """
@@ -380,7 +380,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--root', default=os.path.dirname(os.path.abspath(__file__)))
     ap.add_argument('--deep-seeded', type=int, default=None,
-                    help='已做过深度八轴审校的章数')
+                    help='已做过深度全维审校的章数')
     ap.add_argument('--baseline', type=int, default=0,
                     help='该章号及以前为冻结章，不套用 v2 内容闸')
     ap.add_argument('--strict', action='store_true',
@@ -461,7 +461,7 @@ def main():
     md.append('| 机检未过 | %d |' % len(failed))
     md.append('| 有告警 | %d |' % len(warned))
     md.append('| 跨章重复段 | %d |' % len(dups))
-    md.append('| 待深度八轴审校 | %d 章（已深度 %d） |' % (deep_backlog, deep_seeded))
+    md.append('| 待深度全维审校 | %d 章（已深度 %d） |' % (deep_backlog, deep_seeded))
     md.append('| 本次新增未覆盖章 | %d |' % len(new_files))
     md.append('| v4 内容闸基线 | 第 %d 章及以前豁免 |' % args.baseline)
     md.append('')
@@ -520,7 +520,7 @@ def main():
     # 控制台
     print('OK 机检完成：%d 章，通过 %d，未过 %d，告警 %d，跨章重复 %d 段' %
           (len(results), len(passed), len(failed), len(warned), len(dups)))
-    print('待深度八轴审校：%d 章；本次新增：%d 章' % (deep_backlog, len(new_files)))
+    print('待深度全维审校：%d 章；本次新增：%d 章' % (deep_backlog, len(new_files)))
     if failed:
         for fn, hc, iss, _, _ in failed[:20]:
             print('  [未过] %s (%d字): %s' % (fn, hc, '；'.join(iss)))
