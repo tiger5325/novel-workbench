@@ -142,12 +142,27 @@ CHAPTER_DIR_REL = CORPUS_DIR   # 兼容旧报错文案
 PROD_DIR_REL = r'F:\F05_Projects_Hub\穿越之我是杨广\_工单与报告\机检报告'
 
 
-def chapter_files(root):
+def chapter_files(root, prefer_root=False):
+    """扫描正文目录。root 显式传入时优先用 root 下的「正文_精修版」或「novel-source」，
+    否则沿用作者本机正稿位 CORPUS_DIR；两者都不存在则回退仓库自带 novel-source/。"""
+    corpus = None
+    if prefer_root:
+        for cand in (os.path.join(root, '正文_精修版'), os.path.join(root, 'novel-source')):
+            if os.path.isdir(cand):
+                corpus = cand
+                break
+    if corpus is None and os.path.isdir(CORPUS_DIR):
+        corpus = CORPUS_DIR
+    if corpus is None:
+        for cand in (os.path.join(root, '正文_精修版'), os.path.join(root, 'novel-source')):
+            if os.path.isdir(cand):
+                corpus = cand
+                break
+    if corpus is None:
+        return []
     files = []
-    if not os.path.isdir(CORPUS_DIR):
-        return files
-    for vol in sorted(os.listdir(CORPUS_DIR)):
-        vd = os.path.join(CORPUS_DIR, vol)
+    for vol in sorted(os.listdir(corpus)):
+        vd = os.path.join(corpus, vol)
         if not os.path.isdir(vd) or ('备份' in vol) or vol.startswith('_'):
             continue
         for fn in sorted(os.listdir(vd)):
@@ -378,7 +393,8 @@ def check(path, baseline=0):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--root', default=os.path.dirname(os.path.abspath(__file__)))
+    ap.add_argument('--root', default=None,
+                    help='项目根目录（默认=脚本所在目录；显式传入时优先使用该目录下的正文源）')
     ap.add_argument('--deep-seeded', type=int, default=None,
                     help='已做过深度全维审校的章数')
     ap.add_argument('--baseline', type=int, default=0,
@@ -386,10 +402,12 @@ def main():
     ap.add_argument('--strict', action='store_true',
                     help='有未过章时返回 1')
     args = ap.parse_args()
+    root = args.root or os.path.dirname(os.path.abspath(__file__))
 
-    files = chapter_files(args.root)
+    files = chapter_files(root, prefer_root=args.root is not None)
     if not files:
-        print('未找到章节文件，检查路径：', CHAPTER_DIR_REL)
+        print('未找到章节文件，检查路径：%s 或 %s' %
+              (os.path.join(root, '正文_精修版'), os.path.join(root, 'novel-source')))
         return 1
 
     results = []
@@ -424,7 +442,11 @@ def main():
     dup_titles = [k for k, v in Counter(titles).items() if v > 1]
 
     # 状态追踪
-    prod = os.path.join(args.root, PROD_DIR_REL)
+    # 显式 --root 时报告落在该根目录下，避免写到作者本机路径
+    if args.root is not None:
+        prod = os.path.join(root, '_工单与报告', '机检报告')
+    else:
+        prod = PROD_DIR_REL if os.path.isabs(PROD_DIR_REL) else os.path.join(root, PROD_DIR_REL)
     os.makedirs(prod, exist_ok=True)
     state_path = os.path.join(prod, 'qc_audit_state.json')
     prev = {}

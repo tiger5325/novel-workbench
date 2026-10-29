@@ -4,12 +4,14 @@
 用法：python build.py
 - 改完任何 .md 或正文稿后跑一次
 - server.py 保存时会自动调用本脚本（实现"写盘即刷新"）
+- 若存在 docs/，构建后自动同步 data.js 与 index.html（GitHub Pages 只发布 docs/）
 """
-import os, json, re, sys, time
+import os, json, re, sys, time, shutil
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEB = os.path.join(ROOT, "web")
 OUT = os.path.join(WEB, "data.js")
+DOCS = os.path.join(ROOT, "docs")
 
 # 真实项目根（规划层散文件 + 精修正文均在此，独立于工作台 ROOT）
 # 可用环境变量 NOVEL_PROJECT_ROOT 覆盖；默认取「工作台根目录的同级目录 / 穿越之我是杨广」
@@ -50,7 +52,19 @@ GROUPS = [
     ]),
 ]
 
-MS_ROOT = os.path.join(PROJECT_ROOT, "正文_精修版")
+def resolve_ms_root():
+    """正文源目录：优先「项目根/正文_精修版」，缺失则回退仓库自带 novel-source/。
+    作者本机走精修版正稿；克隆者不改任何配置也能直接构建。"""
+    primary = os.path.join(PROJECT_ROOT, "正文_精修版")
+    if os.path.isdir(primary):
+        return primary
+    fallback = os.path.join(ROOT, "novel-source")
+    if os.path.isdir(fallback):
+        return fallback
+    return primary
+
+
+MS_ROOT = resolve_ms_root()
 OUTLINE = os.path.join(PROJECT_ROOT, "07_逐章大纲_前30章.md")
 OUTLINE_J2 = os.path.join(PROJECT_ROOT, "07_逐章大纲_卷二_111-140.md")
 CH_RE = re.compile(r"^(\d{3})_(.+)\.md$")
@@ -136,15 +150,13 @@ def scan_manuscript():
     """扫描正文章节文件，返回 (rels, chapters)。"""
     rels, chapters = [], []
     if not os.path.isdir(MS_ROOT):
+        print("[WARN] 正文源目录不存在：%s" % MS_ROOT)
         return rels, chapters
     outline = parse_outline()
     for dirpath, dirnames, filenames in os.walk(MS_ROOT):
-        # 只走卷目录（卷一_龙潜于渊 / 卷二_定鼎新朝 …），跳过备份目录
+        # 跳过备份目录与下划线隐藏目录；卷目录名不限（卷一… / Volume1 / 任意名均可）
         dirnames[:] = sorted(d for d in dirnames if ("备份" not in d) and (not d.startswith("_")))
-        # 卷名取所在子目录名（卷一_龙潜于渊 / 卷二_定鼎新朝 …）
-        vol_name = os.path.basename(dirpath)
-        if not vol_name.startswith("卷"):
-            continue
+        vol_name = os.path.basename(dirpath) or os.path.basename(MS_ROOT)
         for fn in sorted(filenames):
             if fn.startswith(SKIP_PREFIX):
                 continue
@@ -235,7 +247,7 @@ def build():
             "ext": ".md",
             "bytes": len(txt.encode("utf-8")),
             "content": txt,
-            "title": "%s %s" % (ch, os.path.basename(rel)[11:-3]),
+            "title": "%s %s" % (ch, c.get("name") or os.path.splitext(os.path.basename(rel))[0]),
             "kind": "md",
             "chapter": ch,
         }
@@ -271,8 +283,31 @@ def build():
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(js)
     print("OK -> %s" % OUT)
+    print("正文源: %s" % MS_ROOT)
     print("files: %d, total: %.1f KB, md: %.1f KB" % (len(files), total_bytes / 1024, md_bytes / 1024))
     print("chapters: %d, words: %d, outline: %d" % (len(chapters), total_words, len(outline)))
+    sync_docs()
+
+
+def sync_docs():
+    """把阅读器两件套同步到 docs/（GitHub Pages 只发布 docs/ 目录）。
+    docs/ 不存在则跳过——是否启用 Pages 由使用者决定，不擅自建目录。"""
+    if not os.path.isdir(DOCS):
+        print("skip docs sync: %s 不存在（未启用 Pages）" % DOCS)
+        return
+    changed = []
+    for name in ("data.js", "index.html"):
+        src = os.path.join(WEB, name)
+        dst = os.path.join(DOCS, name)
+        if not os.path.isfile(src):
+            continue
+        if os.path.isfile(dst):
+            with open(src, "rb") as fa, open(dst, "rb") as fb:
+                if fa.read() == fb.read():
+                    continue
+        shutil.copyfile(src, dst)
+        changed.append(name)
+    print("docs: %s" % ("已是最新" if not changed else "已同步 " + "、".join(changed)))
 
 
 if __name__ == "__main__":

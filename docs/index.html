@@ -1304,6 +1304,8 @@ function syncHeader(){
 function startWatch(){
   let last=(D.generatedAt||'');
   async function tick(){
+    // 页面不可见时不轮询（移动端后台/切走标签页零流量）
+    if(document.hidden) return;
     try{
       const r=await fetch('data.js?watch='+Date.now(),{cache:'no-store'});
       if(!r.ok) return;
@@ -1321,7 +1323,7 @@ function startWatch(){
       document.body.appendChild(s);
     }catch(e){}
   }
-  setInterval(tick,2500);
+  setInterval(tick,8000);
 }
 
 async function probeServer(){
