@@ -1,53 +1,37 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-质控机检脚本 · 智能网文小说创作工作台 v4
+质控机检脚本 · 智能网文小说创作工作台 v6
 ========================================
-对「卷01 现行稿」逐章做【确定性】机检，不依赖任何 LLM / 远程技能，可无人值守运行。
+对现行正文逐章做【确定性】机检，不依赖任何 LLM / 远程技能，可无人值守运行。
+规则全部外置到 qc_rules.json（缺失则用内置默认值）——换书复用只改规则、不改脚本。
 
-v1 硬闸（全章适用，口径：projects/穿越之我是杨广/写作规范.md）：
-  - 首行「# 七字章名」单标题行，标题七汉字，标题与文件名一致
-  - 纯汉字字数 2600–3200
+硬闸（全章适用）：
+  - 首行「# 章名」单标题行，标题汉字数 = rules.title_words（默认 7），标题与文件名一致
+  - 纯汉字字数三段口径（默认 2600–3200 标准 / >3200 且 ≤3520 只告警 / >3520 判未过）
   - 禁 ASCII 直引号 / 直角引号「」；弯引号须成对
   - 禁阿拉伯数字（数字全汉字）
-  - 禁违禁词：太极宫/太极殿/GDP/KPI/系统/互联网/蒸汽机/供应链/杠杆/鉴真/郑和/贾岛/近代火炮
+  - 违禁词（通用：当代科技术语 + 后世才有人物事物）与「用词应替换」（本项目方言映射）
   - 禁格式元素：小标题(#)/加粗(**)/分隔线(---)/列表(* -)
   - 跨章重复段落（≥25 汉字的段落全文比对）
 
-v2 内容闸（仅对 --baseline 之后的新章生效；冻结章不追溯）：
+内容闸（仅对 --baseline 之后的新章生效；冻结章不追溯）：
   - 岁数直报（「十六岁」等；「三岁一易」制度语豁免）
   - 章内重复段落（≥10 汉字且出现≥2次）
-  - 公式化措辞超限（原以为/没想到/愣了一下/说不出话/他知道/他明白/
-    他清楚/叹了口气/深吸一口气/眉头一皱/心里一沉，单句上限各一；
-    六项核心句合计上限三）
-  - 章末套话（末八段出现「因为他是杨广/这是他的使命/越来越好」等）
-  - 现代词（奶酪/蛋糕/起跑线/钢印/复盘/闭环…）
-  - 人名错写（杨谦/杨先 → 杨谅）
-  - 告警不判未过：短段占比过高、章末碎段堆叠、章内整句重复≥3次、软现代词
+  - 公式化措辞超限（套话词表 + 合闸 + 二批动作代偿型套话；只计叙述段）
+  - 章末套话、现代词、人名错写
 
-v4 增补（2026-10-29）：
-  - 公式句只计叙述段（引号内台词另计为告警，不扣闸）
-  - 二批「动作代偿型套话」九组：静场/停顿/半晌/看一眼/轻笑/指节指尖/喉头/没说话/「不是…是…」
-  - 文风密度观测：段均/句均/台词句均/叙述句均/短句占比/对话占比，
-    对标 benchmark/文风向量_最强毒士_高阳.md §5.1 范文实测带；只观测，不判未过
-  - 句子统计过滤 0 汉字残片（收引号不单独成句），修 2026-10-29 查出的口径污染
-
-v4 变更（2026-10-29 · 对标实测后收紧；闸门只对新章生效）：
-  1. 公式句改为**只计叙述段**（以「“」起头的对话段不计入硬闸），对话内命中另报为告警。
-     依据：对话里说「我知道」是人物口吻，不是作者套话；001–164 清洗后残余的 15 处全在台词内。
-  2. 新增二批公式句（**动作代偿型套话**）：静了一息／顿了顿／半晌／看了他一眼／
-     笑了一下／指节指尖／喉头／没说话／不是…是…。实测我方每章密度是范文的 5–14 倍
-     （范文 10 章「不是…是…」仅 2 次＝0.2/章，我方 001–180 均 2.83/章）。
-  3. 新增**文风密度告警**（不判未过）：句均、短句≤10 占比、段均、对话占比，
-     按 `benchmark/文风向量_最强毒士_高阳.md` §五 的范文区间给提示。
+只观测不判未过：
+  - 文风密度（段均/句均/台词句均/叙述句均/短句占比/对话占比）：报告给分布与偏离 Top-N
+  - 月份节气、数据罗列、章末碎段、整句重复、台词内公式句
 
 产物：
-  - projects/.../正文_重写稿/_生产/机检审校报告.md
-  - projects/.../正文_重写稿/_生产/qc_audit_state.json
+  - <项目根>/_工单与报告/机检报告/机检审校报告.md
+  - <项目根>/_工单与报告/机检报告/qc_audit_state.json
 
 用法：
-  python qc_audit.py [--root <项目根>] [--deep-seeded <已深度全维审校章数>]
-                     [--baseline 164] [--strict]
+  python qc_audit.py [--root <项目根>] [--rules <规则文件>]
+                     [--deep-seeded <已深度全维审校章数>] [--baseline 164] [--strict]
 退出码：默认 0（报告性质）；--strict 且有未过章时返回 1。
 """
 import argparse
@@ -76,90 +60,145 @@ DATA_UNIT = re.compile(
     r'[一二三四五六七八九十百千万两]+'
     r'(?:人|骑|车|乘|石|斗|贯|文|钱|顷|亩|户|口|名|具|束|幅|瓮|箱|艘|面|处|所|座|间|匹|头|只|领|副|张|件|升|斤)')
 
-BANNED = ['太极宫', '太极殿', 'GDP', 'KPI', '系统', '互联网', '蒸汽机',
-          '供应链', '杠杆', '鉴真', '郑和', '贾岛', '近代火炮']
-
-MODERN_HARD = ['奶酪', '蛋糕', '起跑线', '钢印', '公司', '董事长',
-               '签字权', '付款权', '绩效', '第二选项', '管理层', '复盘', '闭环',
-               '政策红利', '全员通告', '新老板', '总裁', '业绩', '风险点']
-MODERN_WARN = ['底线', '赋能', '赛道', '颗粒度',
-               '底层逻辑', '考核', '指标', '认知', '信息差', '用户', '产品']
-
-NAME_TYPO = ['杨谦', '杨先']
-
-FORMULA = {
-    '原以为': 1, '没想到': 1, '愣了一下': 1, '说不出话': 1,
-    '他知道': 1, '他也知道': 1, '他明白': 1, '他清楚': 1,
-    '叹了口气': 1, '深吸一口气': 1, '眉头一皱': 1, '心里一沉': 1,
-    '因为他是杨广': 0, '大隋的皇帝': 1, '一件一件': 1,
-    '不能马虎': 0, '不敢马虎': 0, '这是他的使命': 0, '也是他的宿命': 0,
-    '越来越好': 1, '不急': 1, '但不停': 0, '一步一步': 1,
+# ---- 规则默认值（＝本项目当前口径）----
+# 换书复用只改 qc_rules.json，不必动脚本。缺失规则文件时用这里的默认值，零配置可跑。
+DEFAULTS = {
+    'words': {'min': 2600, 'standard_max': 3200, 'hard_max': 3520},
+    'title_words': 7,
+    'banned_words': ['GDP', 'KPI', '系统', '互联网', '蒸汽机', '供应链', '杠杆',
+                     '鉴真', '郑和', '贾岛', '近代火炮'],
+    'lexicon_map': {'太极宫': '大兴宫', '太极殿': '大兴殿'},
+    'modern_hard': ['奶酪', '蛋糕', '起跑线', '钢印', '公司', '董事长',
+                    '签字权', '付款权', '绩效', '第二选项', '管理层', '复盘', '闭环',
+                    '政策红利', '全员通告', '新老板', '总裁', '业绩', '风险点'],
+    'modern_warn': ['底线', '赋能', '赛道', '颗粒度',
+                    '底层逻辑', '考核', '指标', '认知', '信息差', '用户', '产品'],
+    'name_typo': ['杨谦', '杨先'],
+    'formula': {
+        '原以为': 1, '没想到': 1, '愣了一下': 1, '说不出话': 1,
+        '他知道': 1, '他也知道': 1, '他明白': 1, '他清楚': 1,
+        '叹了口气': 1, '深吸一口气': 1, '眉头一皱': 1, '心里一沉': 1,
+        '因为他是杨广': 0, '大隋的皇帝': 1, '一件一件': 1,
+        '不能马虎': 0, '不敢马虎': 0, '这是他的使命': 0, '也是他的宿命': 0,
+        '越来越好': 1, '不急': 1, '但不停': 0, '一步一步': 1,
+    },
+    'formula_core': ['他知道', '他也知道', '原以为', '没想到', '愣了一下', '说不出话'],
+    'formula_core_cap': 3,
+    # 二批公式句：动作代偿型套话（用固定小动作替代具体观察）。组名 -> [变体, 单章上限]
+    'formula2': {
+        '静场': [['静了一息', '静了一静', '沉默了一息', '沉默片刻'], 1],
+        '停顿': [['顿了顿', '停了一停'], 1],
+        '半晌': [['半晌'], 1],
+        '看一眼': [['看了他一眼', '看了她一眼', '看了他们一眼', '看了一眼'], 1],
+        '轻笑': [['笑了一下', '笑了一声', '笑了笑'], 2],
+        '指节指尖': [['指节', '指尖'], 2],
+        '喉头': [['喉头', '喉咙'], 1],
+        '没说话': [['没说话', '没接话', '没有接话', '没有出声', '没出声'], 1],
+    },
+    # 「不是…是…」对举：单句内出现「不是」与「，是」/「。是」的对照结构
+    'not_a_b': {'pattern': '不是[^。！？；]{1,20}[，。]是', 'cap': 3},
+    # 文风密度参考带（对标范文实测·10 章干净口径；仅供观测与排行，不判未过）
+    'style_band': {
+        'sent_avg': [18.5, 25.0],
+        'dialogue_avg': [16.5, 30.0],
+        'narr_avg': [18.0, 26.0],
+        'short_sent': [0.15, 0.34],
+        'para_avg': [18.0, 25.0],
+        'dialogue': [0.05, 0.48],
+    },
+    'style_top_n': 10,
+    'end_marks': ['因为他是杨广', '大隋的皇帝', '这是他的使命', '也是他的宿命',
+                  '不能马虎', '不敢马虎', '一件一件', '一步一步', '但不停',
+                  '他要让这个天下', '这就是他要做的事'],
+    'exclude_pattern': '(README|说明|样章)',
 }
 
-# 六项合计上限：单句各一次也可能凑成一段套话，故另设合闸
-FORMULA_CORE = ['他知道', '他也知道', '原以为', '没想到', '愣了一下', '说不出话']
-FORMULA_CORE_CAP = 3
+RULES = {}
 
-# v4 二批公式句：动作代偿型套话（用固定小动作替代具体观察）。
-# 组名 -> (变体列表, 单章上限)。只统计叙述段，对话段不计入。
-# 定标依据：benchmark §5.1 十篇范文实测，这些短语密度近零（0–1.1/章），
-# 我方 001–180 却有 0.2–2.8/章 —— 差距最大的是「不是…是…」14 倍。
-FORMULA2 = {
-    '静场': (['静了一息', '静了一静', '沉默了一息', '沉默片刻'], 1),
-    '停顿': (['顿了顿', '停了一停'], 1),
-    '半晌': (['半晌'], 1),
-    '看一眼': (['看了他一眼', '看了她一眼', '看了他们一眼', '看了一眼'], 1),
-    '轻笑': (['笑了一下', '笑了一声', '笑了笑'], 2),
-    '指节指尖': (['指节', '指尖'], 2),
-    '喉头': (['喉头', '喉咙'], 1),
-    '没说话': (['没说话', '没接话', '没有接话', '没有出声', '没出声'], 1),
-    '不是是': (['不是'], 3),   # 用 NOT_A_B 正则单独计数，见 count_not_a_b
-}
-# 「不是…是…」对举：单句内出现「不是」与「，是」/「。是」的对照结构
-NOT_A_B = re.compile(r'不是[^。！？；]{1,20}[，。]是')
 
-# 文风密度参考带（benchmark §5.1 范文实测·10 章干净口径；仅供告警，不判未过）
-# 2026-10-29 重定标：旧带 (13.0,18.5)/(30%,50%)/(20,29) 出自含 0 汉字残片的脏口径，作废。
-STYLE_BAND = {
-    'sent_avg': (18.5, 25.0),      # 句均汉字（范文 19.0–23.0，均值 20.5）
-    'dialogue_avg': (16.5, 30.0),  # 台词句均（范文 18.6–27.3，均值 22.5）
-    'narr_avg': (18.0, 26.0),      # 叙述句均（范文 19.0–24.5，均值 21.2）
-    'short_sent': (0.15, 0.34),    # 短句≤10 汉字占比（范文 19.0–31.5%）
-    'para_avg': (18.0, 25.0),      # 段均汉字（范文 18.9–23.2）
-    'dialogue': (0.05, 0.48),      # 对话占比（范文 8.0–43.2%，场景变量）
-}
+def load_rules(path=None):
+    """读取规则文件；缺失或损坏则用内置 DEFAULTS（不阻断机检）。"""
+    rules = json.loads(json.dumps(DEFAULTS))
+    p = path or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'qc_rules.json')
+    if os.path.isfile(p):
+        try:
+            with open(p, encoding='utf-8') as f:
+                user = json.load(f)
+            for k, v in user.items():
+                if k.startswith('_'):
+                    continue
+                if k == 'words' and isinstance(v, dict):
+                    rules['words'].update(v)
+                else:
+                    rules[k] = v
+            rules['_source'] = p
+        except Exception as e:
+            sys.stderr.write('[WARN] 规则文件解析失败，改用内置默认：%s\n' % e)
+            rules['_source'] = 'builtin'
+    else:
+        rules['_source'] = 'builtin'
+    return rules
 
-END_MARKS = ['因为他是杨广', '大隋的皇帝', '这是他的使命', '也是他的宿命',
-             '不能马虎', '不敢马虎', '一件一件', '一步一步', '但不停',
-             '他要让这个天下', '这就是他要做的事']
 
-EXCLUDE = re.compile(r'(README|说明|样章)')
+def apply_rules(rules):
+    """把规则摊成模块级常量，check() 直接引用。"""
+    g = globals()
+    g['RULES'] = rules
+    g['BANNED'] = list(rules['banned_words'])
+    g['LEXICON'] = dict(rules.get('lexicon_map') or {})
+    g['MODERN_HARD'] = list(rules['modern_hard'])
+    g['MODERN_WARN'] = list(rules['modern_warn'])
+    g['NAME_TYPO'] = list(rules['name_typo'])
+    g['FORMULA'] = {k: int(v) for k, v in rules['formula'].items()}
+    g['FORMULA_CORE'] = list(rules['formula_core'])
+    g['FORMULA_CORE_CAP'] = int(rules['formula_core_cap'])
+    g['FORMULA2'] = {k: (list(v[0]), int(v[1])) for k, v in rules['formula2'].items()}
+    g['NOT_A_B'] = re.compile(rules['not_a_b']['pattern'])
+    g['NOT_A_B_CAP'] = int(rules['not_a_b']['cap'])
+    g['STYLE_BAND'] = {k: tuple(v) for k, v in rules['style_band'].items()}
+    g['STYLE_TOP_N'] = int(rules.get('style_top_n', 10))
+    g['END_MARKS'] = list(rules['end_marks'])
+    g['EXCLUDE'] = re.compile(rules['exclude_pattern'])
+    g['WORDS'] = rules['words']
+    g['TITLE_WORDS'] = int(rules['title_words'])
 
-# v5（2026-10-29）：路径指向真实精修版稿位（项目从工作台projects/迁出到F05_Hub根）
-# v6（2026-10-29）：跨全部卷目录扫描（卷一/卷二/…），跳过备份目录
-CORPUS_DIR = r'F:\F05_Projects_Hub\穿越之我是杨广\正文_精修版'
-CHAPTER_DIR_REL = CORPUS_DIR   # 兼容旧报错文案
-PROD_DIR_REL = r'F:\F05_Projects_Hub\穿越之我是杨广\_工单与报告\机检报告'
+
+# ---- 路径解析（不写死任何本机绝对路径）----
+def resolve_project_root(root):
+    """项目根：NOVEL_PROJECT_ROOT → root 自身 → root 同级中带「正文_精修版」的目录 → root。
+    「工作台 + 同级正稿目录」这种布局下，作者本机与克隆者都能自动找对位置。"""
+    env = os.environ.get('NOVEL_PROJECT_ROOT')
+    if env and os.path.isdir(env):
+        return env
+    if os.path.isdir(os.path.join(root, '正文_精修版')):
+        return root
+    parent = os.path.dirname(os.path.abspath(root))
+    try:
+        for name in sorted(os.listdir(parent)):
+            cand = os.path.join(parent, name)
+            if os.path.isdir(os.path.join(cand, '正文_精修版')):
+                return cand
+    except OSError:
+        pass
+    return root
 
 
 def chapter_files(root, prefer_root=False):
-    """扫描正文目录。root 显式传入时优先用 root 下的「正文_精修版」或「novel-source」，
-    否则沿用作者本机正稿位 CORPUS_DIR；两者都不存在则回退仓库自带 novel-source/。"""
-    corpus = None
+    """扫描正文目录。
+    prefer_root=True（显式 --root）时只看该目录下的「正文_精修版」/「novel-source」，
+    不向上探测，保证临时目录自测不串到作者正稿。"""
     if prefer_root:
-        for cand in (os.path.join(root, '正文_精修版'), os.path.join(root, 'novel-source')):
-            if os.path.isdir(cand):
-                corpus = cand
-                break
-    if corpus is None and os.path.isdir(CORPUS_DIR):
-        corpus = CORPUS_DIR
+        cands = [os.path.join(root, '正文_精修版'), os.path.join(root, 'novel-source')]
+    else:
+        proj = resolve_project_root(root)
+        cands = [os.path.join(proj, '正文_精修版'), os.path.join(root, 'novel-source')]
+    corpus = None
+    for cand in cands:
+        if os.path.isdir(cand):
+            corpus = cand
+            break
     if corpus is None:
-        for cand in (os.path.join(root, '正文_精修版'), os.path.join(root, 'novel-source')):
-            if os.path.isdir(cand):
-                corpus = cand
-                break
-    if corpus is None:
-        return []
+        return [], None
     files = []
     for vol in sorted(os.listdir(corpus)):
         vd = os.path.join(corpus, vol)
@@ -168,7 +207,7 @@ def chapter_files(root, prefer_root=False):
         for fn in sorted(os.listdir(vd)):
             if fn.endswith('.md') and not EXCLUDE.search(fn):
                 files.append(os.path.join(vd, fn))
-    return files
+    return files, corpus
 
 
 def paragraphs(text):
@@ -198,20 +237,23 @@ def check(path, baseline=0):
         if '#' in title:
             issues.append('章名行含多余 #')
         tc = len(HAN.findall(title))
-        if tc != 7:
+        if tc != TITLE_WORDS:
             if num is not None and num > baseline:
-                issues.append('标题非七字(%d)' % tc)
+                issues.append('标题非%d字(%d)' % (TITLE_WORDS, tc))
             else:
-                warns.append('标题非七字(%d)，冻结章不追溯' % tc)
+                warns.append('标题非%d字(%d)，冻结章不追溯' % (TITLE_WORDS, tc))
         if m and title != m.group(2):
             issues.append('标题与文件名不一致')
 
-    # 字数
+    # 字数（三段口径，对齐写作规范：标准区间 / 上浮缓冲 / 硬上限）
     hancount = len(HAN.findall(text))
-    if hancount < 2600:
-        issues.append('字数不足(%d<2600)' % hancount)
-    elif hancount > 3200:
-        issues.append('字数超限(%d>3200)' % hancount)
+    w_lo, w_std, w_hard = WORDS['min'], WORDS['standard_max'], WORDS['hard_max']
+    if hancount < w_lo:
+        issues.append('字数不足(%d<%d)' % (hancount, w_lo))
+    elif hancount > w_hard:
+        issues.append('字数超硬上限(%d>%d)' % (hancount, w_hard))
+    elif hancount > w_std:
+        warns.append('字数超出标准区间(%d>%d，未超硬上限%d)' % (hancount, w_std, w_hard))
 
     # 引号
     if ASCII_QUOTE.search(text):
@@ -226,10 +268,14 @@ def check(path, baseline=0):
     if ARABIC.search(text):
         issues.append('含阿拉伯数字')
 
-    # 违禁词
+    # 违禁词（跨题材通用：当代科技术语 + 后世才有人物与事物）
     hit = [w for w in BANNED if w in text]
     if hit:
         issues.append('违禁词:' + ','.join(hit))
+    # 本项目方言限定用词（左=禁用写法，右=应替换为；属史实/设定考据，不是通用禁词）
+    lex = ['%s→%s' % (w, LEXICON[w]) for w in LEXICON if w in text]
+    if lex:
+        issues.append('用词应替换:' + ','.join(lex))
 
     # 格式禁用元素（跳过首行）
     for i, ln in enumerate(lines):
@@ -250,7 +296,7 @@ def check(path, baseline=0):
     metrics = {'paras': len(paras), 'short_ratio': 0.0, 'tail_avg': 0.0,
                'han': hancount, 'sent_avg': 0.0, 'short_sent': 0.0,
                'para_avg': 0.0, 'dialogue': 0.0,
-               'dialogue_avg': 0.0, 'narr_avg': 0.0}
+               'dialogue_avg': 0.0, 'narr_avg': 0.0, 'flags': []}
     if paras:
         short = sum(1 for p in paras[1:] if len(HAN.findall(p)) < 20)
         denom = max(1, len(paras) - 1)
@@ -316,14 +362,12 @@ def check(path, baseline=0):
     if core_sum > FORMULA_CORE_CAP:
         over.append('六项合计×%d(上限%d)' % (core_sum, FORMULA_CORE_CAP))
     for name, (variants, cap) in FORMULA2.items():
-        if name == '不是是':
-            continue
         c = sum(narr.count(v) for v in variants)
         if c > cap:
             over.append('%s×%d(上限%d)' % (name, c, cap))
     nab = len(NOT_A_B.findall(narr))
-    if nab > 3:
-        over.append('不是…是…×%d(上限3)' % nab)
+    if nab > NOT_A_B_CAP:
+        over.append('不是…是…×%d(上限%d)' % (nab, NOT_A_B_CAP))
     if over:
         issues.append('公式化:' + ','.join(over))
     if dlg_hits:
@@ -351,26 +395,31 @@ def check(path, baseline=0):
     # ---- 告警（不判未过） ----
     # 「短段占比≥42%」告警已撤销（2026-10-29）：范文实测短段(<20汉字)占 51%–61%，
     # 均值 56%——该阈值是在拆句数碎片时定的，会把对标范文的正常分段判成病。
-    # v4 文风密度告警（对标 benchmark §5.1 范文区间）
-    lo, hi = STYLE_BAND['sent_avg']
-    if metrics['sent_avg'] and not (lo <= metrics['sent_avg'] <= hi):
-        warns.append('句均%.1f(范文%.0f–%.0f)' % (metrics['sent_avg'], lo, hi))
-    lo, hi = STYLE_BAND['dialogue_avg']
-    if metrics['dialogue_avg'] and not (lo <= metrics['dialogue_avg'] <= hi):
-        warns.append('台词句均%.1f(范文%.1f–%.1f；过短＝台词被打成碎句)' %
-                     (metrics['dialogue_avg'], lo, hi))
-    lo, hi = STYLE_BAND['narr_avg']
-    if metrics['narr_avg'] and not (lo <= metrics['narr_avg'] <= hi):
-        warns.append('叙述句均%.1f(范文%.0f–%.0f)' %
-                     (metrics['narr_avg'], lo, hi))
-    lo, hi = STYLE_BAND['short_sent']
-    if metrics['short_sent'] and metrics['short_sent'] > hi:
-        warns.append('短句≤10占%.0f%%(范文≤%.0f%%)' %
-                     (metrics['short_sent'] * 100, hi * 100))
-    lo, hi = STYLE_BAND['para_avg']
-    if metrics['para_avg'] and not (lo <= metrics['para_avg'] <= hi):
-        warns.append('段均%.1f(范文%.0f–%.0f)' % (metrics['para_avg'], lo, hi))
-    # 月份/节气与数据罗列：只告警，不扣闸（2026-10-29 Boss 口径：
+    # v4 文风密度观测（对标 benchmark §5.1 范文区间）
+    # v6（2026-10-30）：不再逐章写进告警——全员命中的告警等于没有告警。
+    # 改为 metrics['flags'] 汇总，报告按「偏离幅度 Top-N」列明细。
+    flags = []
+    for key, label in (('sent_avg', '句均'), ('dialogue_avg', '台词句均'),
+                       ('narr_avg', '叙述句均'), ('short_sent', '短句≤10占比'),
+                       ('para_avg', '段均')):
+        v = metrics.get(key) or 0
+        if not v:
+            continue
+        lo, hi = STYLE_BAND[key]
+        if lo <= v <= hi:
+            continue
+        span = max(1e-9, hi - lo)
+        dev = (v - hi) / span if v > hi else (lo - v) / span
+        pct = (key == 'short_sent')
+        flags.append({
+            'metric': label,
+            'value': ('%.0f%%' % (v * 100)) if pct else ('%.1f' % v),
+            'band': ('%.0f%%–%.0f%%' % (lo * 100, hi * 100)) if pct
+                    else ('%.1f–%.1f' % (lo, hi)),
+            'dev': round(dev, 3),
+        })
+    metrics['flags'] = flags
+    # 月份/节气与数据罗列：只告警，不扣闸（2026-10-29 作者口径：
     # 「别再列举数据，用谋略布局才有吸引力」——密度超标先提示，改法靠判例）
     d = len(DATE_WORD.findall(text))
     if d > 3:
@@ -394,7 +443,9 @@ def check(path, baseline=0):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--root', default=None,
-                    help='项目根目录（默认=脚本所在目录；显式传入时优先使用该目录下的正文源）')
+                    help='项目根目录（默认=脚本所在目录；显式传入时只用该目录下的正文源）')
+    ap.add_argument('--rules', default=None,
+                    help='规则文件路径（默认=脚本同级 qc_rules.json；缺失则用内置默认）')
     ap.add_argument('--deep-seeded', type=int, default=None,
                     help='已做过深度全维审校的章数')
     ap.add_argument('--baseline', type=int, default=0,
@@ -404,11 +455,16 @@ def main():
     args = ap.parse_args()
     root = args.root or os.path.dirname(os.path.abspath(__file__))
 
-    files = chapter_files(root, prefer_root=args.root is not None)
+    rules = load_rules(args.rules)
+    apply_rules(rules)
+
+    files, corpus = chapter_files(root, prefer_root=args.root is not None)
     if not files:
         print('未找到章节文件，检查路径：%s 或 %s' %
               (os.path.join(root, '正文_精修版'), os.path.join(root, 'novel-source')))
         return 1
+    print('正文源：%s（%d 章）' % (corpus, len(files)))
+    print('规则文件：%s' % rules['_source'])
 
     results = []
     for p in files:
@@ -442,11 +498,11 @@ def main():
     dup_titles = [k for k, v in Counter(titles).items() if v > 1]
 
     # 状态追踪
-    # 显式 --root 时报告落在该根目录下，避免写到作者本机路径
+    # 显式 --root 时报告落在该根目录下；默认落到项目根的 _工单与报告/机检报告
     if args.root is not None:
         prod = os.path.join(root, '_工单与报告', '机检报告')
     else:
-        prod = PROD_DIR_REL if os.path.isabs(PROD_DIR_REL) else os.path.join(root, PROD_DIR_REL)
+        prod = os.path.join(resolve_project_root(root), '_工单与报告', '机检报告')
     os.makedirs(prod, exist_ok=True)
     state_path = os.path.join(prod, 'qc_audit_state.json')
     prev = {}
@@ -472,9 +528,10 @@ def main():
     warned = [r for r in results if r[3]]
 
     md = []
-    md.append('# 机检审校报告（确定性 v4）\n')
-    md.append('> 生成时间：%s　｜　范围：卷01 现行稿全 %d 章　｜　口径：写作规范.md 硬闸\n'
+    md.append('# 机检审校报告（确定性 v6）\n')
+    md.append('> 生成时间：%s　｜　范围：现行稿全 %d 章　｜　口径：写作规范.md 硬闸\n'
               % (now, len(results)))
+    md.append('> 正文源：`%s`　｜　规则：`%s`\n' % (corpus, rules['_source']))
     md.append('## 一、总览\n')
     md.append('| 项 | 数值 |')
     md.append('|---|---:|')
@@ -485,7 +542,9 @@ def main():
     md.append('| 跨章重复段 | %d |' % len(dups))
     md.append('| 待深度全维审校 | %d 章（已深度 %d） |' % (deep_backlog, deep_seeded))
     md.append('| 本次新增未覆盖章 | %d |' % len(new_files))
-    md.append('| v4 内容闸基线 | 第 %d 章及以前豁免 |' % args.baseline)
+    md.append('| 内容闸基线 | 第 %d 章及以前豁免 |' % args.baseline)
+    md.append('| 字数口径 | %d–%d 标准，≤%d 只告警，>%d 判未过 |'
+              % (WORDS['min'], WORDS['standard_max'], WORDS['hard_max'], WORDS['hard_max']))
     md.append('')
     md.append('## 二、未过章明细\n')
     if failed:
@@ -514,24 +573,68 @@ def main():
     md.append('- 重名章：%s' % ('、'.join(dup_titles) if dup_titles else '无'))
     md.append('\n## 六、本次新增（上轮未覆盖）\n')
     md.append('、'.join(new_files) if new_files else '无')
-    md.append('\n## 七、文风密度观测（对标 benchmark §5.1 范文带·只观测不判未过）\n')
-    md.append('| 章文件 | 段均 | 句均 | 台词句均 | 叙述句均 | 短句≤10 | 对话占比 |')
-    md.append('|---|---:|---:|---:|---:|---:|---:|')
-    for fn, hc, _, _, mt in results:
-        m2 = FILENAME.match(fn)
-        if m2 and int(m2.group(1)) > args.baseline:
-            md.append('| %s | %.1f | %.1f | %.1f | %.1f | %.0f%% | %.0f%% |' % (
-                fn, mt['para_avg'], mt['sent_avg'], mt['dialogue_avg'],
-                mt['narr_avg'], mt['short_sent'] * 100, mt['dialogue'] * 100))
+    md.append('\n## 七、文风密度观测（对标范文带·只观测不判未过）\n')
+    style_rows = [r for r in results if FILENAME.match(r[0])]
+    md.append('### 7.1 分布（共 %d 章）\n' % len(style_rows))
+    md.append('| 指标 | 范文带 | P10 | 中位数 | P90 | 达标率 |')
+    md.append('|---|---|---:|---:|---:|---:|')
+    for key, label, pct in (('para_avg', '段均', False), ('sent_avg', '句均', False),
+                            ('dialogue_avg', '台词句均', False), ('narr_avg', '叙述句均', False),
+                            ('short_sent', '短句≤10占比', True), ('dialogue', '对话占比', True)):
+        vals = sorted(r[4].get(key, 0) for r in style_rows if r[4].get(key))
+        if not vals:
+            continue
+        lo, hi = STYLE_BAND[key]
+        ok = sum(1 for v in vals if lo <= v <= hi)
+
+        def _p(q):
+            i = min(len(vals) - 1, max(0, int(round(q * (len(vals) - 1)))))
+            return vals[i]
+
+        fmt = (lambda x: '%.0f%%' % (x * 100)) if pct else (lambda x: '%.1f' % x)
+        band = ('%.0f%%–%.0f%%' % (lo * 100, hi * 100)) if pct else ('%.1f–%.1f' % (lo, hi))
+        md.append('| %s | %s | %s | %s | %s | %.0f%% |' % (
+            label, band, fmt(_p(0.1)), fmt(_p(0.5)), fmt(_p(0.9)),
+            ok * 100.0 / len(vals)))
+
     md.append('')
-    md.append('范文带：段均 18.9–23.2 ｜ 句均 19.0–23.0 ｜ 台词句均 18.6–27.3 ｜ '
-              '叙述句均 19.0–24.5 ｜ 短句 19.0–31.5% ｜ 对话 8.0–43.2%')
+    md.append('> 读法：达标率反映「全书系统性偏离」而非个别章问题——'
+              '中位数整体落在带外时，说明是文风基底要调，不是挑章返工。'
+              '本节只观测，不参与未过判定。')
+
+    scored = []
+    for fn, _hc, _iss, _ws, mt in style_rows:
+        fl = mt.get('flags') or []
+        if fl:
+            top = max(fl, key=lambda d: d['dev'])
+            scored.append((top['dev'], fn, fl))
+    scored.sort(key=lambda x: -x[0])
+    top_n = scored[:STYLE_TOP_N]
+    md.append('')
+    md.append('### 7.2 偏离最大 %d 章（按超出参考带宽的倍数排序）\n' % len(top_n))
+    if top_n:
+        md.append('| 章文件 | 指标 | 实测 | 范文带 | 偏离带宽 |')
+        md.append('|---|---|---|---|---:|')
+        for dev, fn, fl in top_n:
+            first = max(fl, key=lambda d: d['dev'])
+            rest = len(fl) - 1
+            name = first['metric'] + (' 等%d项' % (rest + 1) if rest else '')
+            md.append('| %s | %s | %s | %s | %.1f× |' % (
+                fn, name, first['value'], first['band'], dev))
+        if len(scored) > len(top_n):
+            md.append('')
+            md.append('另有 %d 章存在偏离，未列出（合计 %d 章偏离参考带）。'
+                      % (len(scored) - len(top_n), len(scored)))
+    else:
+        md.append('全部章节均落在参考带内。')
     md.append('')
     with open(os.path.join(prod, '机检审校报告.md'), 'w', encoding='utf-8') as f:
         f.write('\n'.join(md))
 
     json.dump({
-        'gate_version': 4,
+        'gate_version': 6,
+        'rules_source': rules['_source'],
+        'corpus': corpus,
         'last_run': now,
         'baseline': args.baseline,
         'audited_files': sorted(cur_files),

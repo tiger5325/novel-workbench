@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>《穿越之我是杨广》· 阅读与创作台</title>
+<title>网文创作工作台 · 阅读与创作台</title>
 <style>
 :root{
   --bg:#f6f5f2; --panel:#ffffff; --ink:#1f2430; --muted:#6b7280; --line:#e7e2d8;
@@ -448,7 +448,7 @@ a:hover{text-decoration:underline}
 <div class="app">
   <header class="appbar" id="appbar">
     <button class="iconbtn menu-btn" id="menuBtn" title="目录">☰</button>
-    <div class="brand"><b>《穿越之我是杨广》</b><span>高阳毒士爽文 · 阅读与创作台</span></div>
+    <div class="brand"><b id="brandName">网文创作工作台</b><span id="brandSub">阅读与创作台</span></div>
     <span class="spacer"></span>
     <span class="acount" id="acount"></span>
     <div class="asearch"><input id="q" placeholder="全站搜索…" autocomplete="off"></div>
@@ -520,6 +520,30 @@ let overrides={};
 let editMode=false;
 let curPath=null;
 let D = D0;
+/* 品牌与导航配置来自 data.brand（构建时读 web/brand.json 注入）。
+   换书只改 brand.json，不必动本文件；缺字段时回退下面的通用默认值。 */
+function brand(k, dflt){
+  const b=(D&&D.brand)||{};
+  const v=b[k];
+  if(v===undefined||v===null||v==='') return (dflt!==undefined?dflt:'');
+  return v;
+}
+function brandBook(){ const t=brand('title','我的小说'); return '《'+t+'》'; }
+function brandSub(){
+  const parts=[brand('tagline',''),brand('volume','')].filter(Boolean);
+  return (parts.join(' · ')||'阅读与创作台');
+}
+/* 按 brand 的 path 取文档卡片；brand 未配置则从 data.groups 自动取前 n 项 */
+function brandDocs(key, groupId, n){
+  const list=brand(key, null);
+  if(Array.isArray(list)&&list.length) return list;
+  const g=(D.groups||[]).filter(function(x){return x.id===groupId;})[0];
+  if(!g||!g.files) return [];
+  return g.files.slice(0,n||6).map(function(p){
+    const f=(D.files||{})[p]||{};
+    return {path:p, label:(f.title||f.name||p), sub:''};
+  });
+}
 
 function loadOverrides(){
   const o={};
@@ -640,7 +664,7 @@ function renderManuscript(){
   all.forEach(c=>{ const k=(c.vol||'卷一')+' · '+(c.act||'未分幕'); (acts[k]=acts[k]||[]).push(c); });
 
   document.getElementById('topbar').innerHTML=
-    '<span class="title">正文 · 卷一 龙潜于渊</span>'+
+    '<span class="title">正文 · '+esc(brand('volume',''))+'</span>'+
     '<span class="crumb">已写 '+written.length+' / '+all.length+' 章</span>'+
     '<span class="spacer"></span>'+
     '<button class="btn ghost" data-go="#/chapters">细纲</button>';
@@ -765,26 +789,17 @@ function renderNav(){
 function renderWorkspace(){
   const ws=document.getElementById('workspace');
   const docActive=p=>(parseHash().view==='doc'&&parseHash().path===p)?' active':'';
-  const found=[
-    ['projects/穿越之我是杨广/01_总纲.md','总纲','最高纲领'],
-    ['projects/穿越之我是杨广/06_十卷提纲表.md','十卷提纲','卷一至卷十'],
-    ['projects/穿越之我是杨广/07_逐章大纲_前30章.md','逐章大纲','001–030'],
-    ['projects/穿越之我是杨广/02_人物剧集库.md','人物剧集','七阵营'],
-    ['projects/穿越之我是杨广/11_谋略体系库.md','谋略体系','高阳五拍'],
-    ['projects/穿越之我是杨广/04_写作规范.md','写作规范','铁律'],
-  ];
-  let h='<div class="ws-row"><div class="ws-project"><b>《穿越之我是杨广》</b><span>高阳毒士爽文 · 卷一 龙潜于渊</span></div>'
-       +'<span class="ws-label">地基八档</span><div class="ws-scroll">';
-  found.forEach(([p,t,s])=>{ h+='<div class="wscard'+docActive(p)+'" data-go="#/doc/'+encodeURIComponent(p)+'"><span>'+t+'</span><span class="s">'+s+'</span></div>'; });
+  const found=brandDocs('navDocs','project',6);
+  let h='<div class="ws-row"><div class="ws-project"><b>'+esc(brandBook())+'</b><span>'+esc(brandSub())+'</span></div>'
+       +'<span class="ws-label">'+esc(brand('navLabel','地基档案'))+'</span><div class="ws-scroll">';
+  found.forEach(d=>{
+    h+='<div class="wscard'+docActive(d.path)+'" data-go="#/doc/'+encodeURIComponent(d.path)+'"><span>'+esc(d.label)+'</span>'
+      +(d.sub?'<span class="s">'+esc(d.sub)+'</span>':'')+'</div>';
+  });
   h+='</div></div>';
-  const plat=[
-    ['README.md','平台 README'],
-    ['00-流水线总览与路由.md','流水线总览'],
-    ['06-顶流对标·范文提炼与拆解.md','顶流对标'],
-    ['benchmark/文风向量_最强毒士_高阳.md','文风向量'],
-  ];
+  const plat=brandDocs('platformDocs','platform',4);
   h+='<div class="ws-row"><span class="ws-label">平台基座</span><div class="ws-scroll">';
-  plat.forEach(([p,t])=>{ h+='<div class="wscard'+docActive(p)+'" data-go="#/doc/'+encodeURIComponent(p)+'">'+t+'</div>'; });
+  plat.forEach(d=>{ h+='<div class="wscard'+docActive(d.path)+'" data-go="#/doc/'+encodeURIComponent(d.path)+'">'+esc(d.label)+'</div>'; });
   h+='</div></div>';
   ws.innerHTML=h;
   ws.querySelectorAll('[data-go]').forEach(el=>{ el.onclick=()=>go(el.getAttribute('data-go')); });
@@ -853,7 +868,7 @@ function renderSidebar(){
   const words=chs.reduce((a,c)=>a+c.words,0);
   const st=document.getElementById('sbStatus');
   if(st){
-    st.innerHTML='<b>《穿越之我是杨广》</b>'+
+    st.innerHTML='<b>'+esc(brandBook())+'</b>'+
       chs.length+' 章已写 · '+humanWords(words)+
       '<br>构建于 '+(D.generatedAt||'—');
   }
@@ -877,15 +892,8 @@ function renderSidebar(){
   cb.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>{closeSidebar();go(el.getAttribute('data-go'));});
 
   const db=document.getElementById('sbDocs');
-  const docs=[
-    ['projects/穿越之我是杨广/01_总纲.md','总纲'],
-    ['projects/穿越之我是杨广/02_人物剧集库.md','人物剧集库'],
-    ['projects/穿越之我是杨广/04_写作规范.md','写作规范'],
-    ['projects/穿越之我是杨广/06_十卷提纲表.md','十卷提纲表'],
-    ['projects/穿越之我是杨广/07_逐章大纲_前30章.md','逐章大纲(前30)'],
-    ['projects/穿越之我是杨广/11_谋略体系库.md','谋略体系库'],
-  ];
-  db.innerHTML=docs.map(([p,t])=>'<div class="sb-ch" data-go="#/doc/'+encodeURIComponent(p)+'"><span class="n">'+t+'</span></div>').join('');
+  const docs=brandDocs('navDocs','project',6);
+  db.innerHTML=docs.map(d=>'<div class="sb-ch" data-go="#/doc/'+encodeURIComponent(d.path)+'"><span class="n">'+esc(d.label)+'</span></div>').join('');
   db.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>{closeSidebar();go(el.getAttribute('data-go'));});
 }
 
@@ -925,13 +933,13 @@ function renderDash(){
   content.innerHTML=
   '<div class="wrap wide">'+
     '<div class="hero">'+
-      '<h2>《穿越之我是杨广》</h2>'+
-      '<p>示例作品：隋末穿越 · 高阳毒士爽文。工作台本身题材与文风不设限——题材锚定、人物卡、文风模板都可替换。流水线四段：规划→生产→质检→纪律。手机/电脑均可直接读正文。</p>'+
-      '<span class="tag">示例：高阳毒士爽文 · 不拘正统 · 卷一 龙潜于渊</span>'+
+      '<h2>'+esc(brandBook())+'</h2>'+
+      '<p>'+esc(brand('intro','工作台本身题材与文风不设限：换掉正文源里的章节再重新构建即可。'))+'</p>'+
+      '<span class="tag">'+esc(brand('heroTag', brandSub()))+'</span>'+
     '</div>'+
     bigCard+
     '<div class="cards">'+
-      '<div class="card"><div class="k">卷一已写 / 细纲</div><div class="v">'+done+'<small> / '+total+' 章</small></div></div>'+
+      '<div class="card"><div class="k">正文已写 / 细纲</div><div class="v">'+done+'<small> / '+total+' 章</small></div></div>'+
       '<div class="card"><div class="k">正文累计</div><div class="v">'+(words>=10000?(words/10000).toFixed(1):words)+'<small> '+(words>=10000?'万字':'字')+'</small></div></div>'+
       '<div class="card"><div class="k">文档总数</div><div class="v">'+docCount+'<small> 份</small></div></div>'+
       '<div class="card"><div class="k">内容体量</div><div class="v">'+(bytes/1024).toFixed(0)+'<small> KB</small></div></div>'+
@@ -940,12 +948,10 @@ function renderDash(){
     '<div class="bars">'+(bars||'<div class="empty">暂无章节数据</div>')+'</div>'+
     '<div class="section-title">快速进入</div>'+
     '<div class="quick">'+
-      qcard('#/manuscript','正文阅读','卷一已写章节 · 点读')+
-      qcard('#/chapters','章节看板','001–110 逐章细纲 · 可标状态')+
-      qcard('#/doc/'+encodeURIComponent('projects/穿越之我是杨广/01_总纲.md'),'总纲','最高纲领 · 七矛盾轴')+
-      qcard('#/doc/'+encodeURIComponent('projects/穿越之我是杨广/06_十卷提纲表.md'),'十卷提纲','卷一至卷十 · 骨架')+
-      qcard('#/doc/'+encodeURIComponent('projects/穿越之我是杨广/02_人物剧集库.md'),'人物剧集库','七阵营人物弧线')+
-      qcard('#/doc/'+encodeURIComponent('projects/穿越之我是杨广/04_写作规范.md'),'写作规范','高阳铁律 · 开局铁闸')+
+      brandDocs('quick',null,6).map(function(q){
+        var href=q.href||('#/doc/'+encodeURIComponent(q.path||''));
+        return qcard(href, esc(q.label||''), esc(q.desc||''));
+      }).join('')+
     '</div>'+
   '</div>';
 
@@ -1037,7 +1043,7 @@ function renderEdit(path){
 async function saveDoc(path,val){
   if(serverMode){
     try{
-      const r=await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path,content:val})});
+      const r=await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json','X-WB-Client':'workbench'},body:JSON.stringify({path,content:val})});
       const j=await r.json();
       if(j.ok){ D.files[path] && (D.files[path].content=val); overrides[path]=val; toast('已写入磁盘：'+path); renderDoc(path); }
       else toast('保存失败：'+(j.err||'未知'),true);
@@ -1292,7 +1298,14 @@ function route(){
   onContentScroll();
 }
 
+function applyBrand(){
+  document.title=brandBook()+' · 阅读与创作台';
+  const n=document.getElementById('brandName'), s=document.getElementById('brandSub');
+  if(n) n.textContent=brandBook();
+  if(s) s.textContent=brandSub()+' · 阅读与创作台';
+}
 function syncHeader(){
+  applyBrand();
   const el=document.getElementById('acount');
   if(!el) return;
   const n=(D.chapters||[]).length;

@@ -1,86 +1,164 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-批量清洗110章格式硬伤：
-1. ASCII直引号 " → 中文弯引号 “”（成对替换）
-2. --- 分隔线 → 删除
-3. 阿拉伯数字 → 汉字数字
-"""
+批量清洗格式硬伤：ASCII 直引号 → 中文弯引号、整行 --- 分隔线 → 删除、阿拉伯数字 → 汉字数字。
 
+默认 **dry-run**：只报告将要改什么，不写盘。
+确认无误后加 --apply 才真改，且每个文件先存 .bak。
+
+用法：
+  <python> batch_clean.py [路径 ...]              # 预览
+  <python> batch_clean.py [路径 ...] --apply      # 落盘（自动 .bak）
+  <python> batch_clean.py --apply --no-digits     # 只处理引号与分隔线
+不给路径时扫仓库自带的 novel-source/。
+"""
+import argparse
 import os
 import re
+import shutil
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+DIGITS = "零一二三四五六七八九"
+
+
+def cn_num(s):
+    """把 0–9999 的整数字符串转成汉字数字；超出范围或含前导零则原样返回。"""
+    if not s.isdigit() or (len(s) > 1 and s[0] == "0"):
+        return s
+    n = int(s)
+    if n > 9999:
+        return s
+    if n == 0:
+        return "零"
+    units = [(1000, "千"), (100, "百"), (10, "十")]
+    out, zero = "", False
+    rest = n
+    for base, name in units:
+        q, rest = divmod(rest, base)
+        if q:
+            if zero and out:
+                out += "零"
+            out += (DIGITS[q] if q > 1 else ("十" if name == "十" else "一")) + name
+            zero = False
+        elif out:
+            zero = True
+    if rest:
+        if zero and out:
+            out += "零"
+        out += DIGITS[rest]
+    return out or "零"
+
 
 def convert_quotes(text):
-    """成对替换ASCII直引号为中文弯引号"""
-    # 双引号成对替换
-    result = []
-    in_quote = False
+    """成对替换 ASCII 双引号为中文弯引号。"""
+    out, in_quote = [], False
     for ch in text:
         if ch == '"':
-            if not in_quote:
-                result.append('\u201c')  # 左双引号 "
-                in_quote = True
-            else:
-                result.append('\u201d')  # 右双引号 "
-                in_quote = False
+            out.append("\u201d" if in_quote else "\u201c")
+            in_quote = not in_quote
         else:
-            result.append(ch)
-    return ''.join(result)
+            out.append(ch)
+    return "".join(out)
+
 
 def remove_separators(text):
-    """删除---分隔线"""
-    text = re.sub(r'^---\s*$', '', text, flags=re.MULTILINE)
-    text = text.replace('---', '')
-    return text
+    """删除独立成行的 --- 分隔线（不做全局字符串替换，避免伤及正文内容）。"""
+    return re.sub(r"(?m)^[ \t]*---+[ \t]*\r?\n?", "", text)
+
 
 def convert_digits(text):
-    """阿拉伯数字转汉字数字"""
-    digit_map = {
-        '0': '零', '1': '一', '2': '二', '3': '三', '4': '四',
-        '5': '五', '6': '六', '7': '七', '8': '八', '9': '九'
-    }
-    for d, c in digit_map.items():
-        text = text.replace(d, c)
-    return text
+    """阿拉伯数字 → 汉字数字。只在「数词」语境替换：连续数字整体转，不逐位拆。"""
+    return re.sub(r"\d+", lambda m: cn_num(m.group(0)), text)
 
-def clean_file(filepath):
-    """清洗单个文件"""
-    with open(filepath, 'r', encoding='utf-8') as f:
-        content = f.read()
-    
-    original = content
-    
-    # 1. 替换引号
-    content = convert_quotes(content)
-    
-    # 2. 删除分隔线
-    content = remove_separators(content)
-    
-    # 3. 转换数字
-    content = convert_digits(content)
-    
-    if content != original:
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(content)
-        return True
-    return False
+
+def clean_text(text, do_digits=True):
+    t = convert_quotes(text)
+    t = remove_separators(t)
+    if do_digits:
+        t = convert_digits(t)
+    return t
+
+
+def diff_summary(old, new):
+    items = []
+    dq = len(re.findall(r'"', old))
+    if dq:
+        items.append("直引号 %d 处" % dq)
+    sep = len(re.findall(r"(?m)^[ \t]*---+[ \t]*$", old))
+    if sep:
+        items.append("分隔线 %d 行" % sep)
+    nd = len(re.findall(r"\d+", old))
+    if nd:
+        items.append("数字 %d 处" % nd)
+    return items
+
+
+def collect(paths):
+    out = []
+    for p in paths:
+        if os.path.isfile(p):
+            out.append(p)
+        elif os.path.isdir(p):
+            for dirpath, dirnames, filenames in os.walk(p):
+                dirnames[:] = sorted(d for d in dirnames
+                                     if not d.startswith("_") and "备份" not in d)
+                for fn in sorted(filenames):
+                    if fn.endswith(".md"):
+                        out.append(os.path.join(dirpath, fn))
+        else:
+            sys.stderr.write("[skip] 不存在：%s\n" % p)
+    return out
+
+
+def default_targets():
+    for name in ("novel-source", "正文_精修版"):
+        p = os.path.join(HERE, name)
+        if os.path.isdir(p):
+            return [p]
+    return [HERE]
+
 
 def main():
-    dir_path = r"F:\F05_Projects_Hub\穿越之我是杨广\正文_精修版\卷一_龙潜于渊"
-    
-    files = sorted([f for f in os.listdir(dir_path) if f.endswith('.md')])
-    print(f"共 {len(files)} 个文件待清洗")
-    
-    changed = 0
-    for fname in files:
-        fpath = os.path.join(dir_path, fname)
-        try:
-            if clean_file(fpath):
-                changed += 1
-        except Exception as e:
-            print(f"  [错误] {fname}: {e}")
-    
-    print(f"\n清洗完成: {changed}/{len(files)} 个文件被修改")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("paths", nargs="*", help="要清洗的 .md 文件或目录")
+    ap.add_argument("--apply", action="store_true", help="真正写盘（默认只预览）")
+    ap.add_argument("--no-digits", action="store_true", help="跳过阿拉伯数字转换")
+    args = ap.parse_args()
 
-if __name__ == '__main__':
-    main()
+    targets = collect(args.paths or default_targets())
+    if not targets:
+        print("未找到 .md 文件")
+        return 1
+
+    do_digits = not args.no_digits
+    print("%s：%d 个文件（数字转换：%s）"
+          % ("落盘模式" if args.apply else "预览模式（不改盘，加 --apply 才写）",
+             len(targets), "开" if do_digits else "关"))
+
+    changed = 0
+    for p in targets:
+        try:
+            with open(p, encoding="utf-8") as f:
+                old = f.read()
+            new = clean_text(old, do_digits)
+            if new == old:
+                continue
+            changed += 1
+            rel = os.path.relpath(p, HERE)
+            print("  %s  ← %s" % (rel, "、".join(diff_summary(old, new)) or "内容变化"))
+            if args.apply:
+                shutil.copyfile(p, p + ".bak")
+                with open(p, "w", encoding="utf-8", newline="\n") as f:
+                    f.write(new)
+        except Exception as e:
+            print("  [错误] %s: %s" % (p, e))
+
+    print("\n%s：%d/%d 个文件%s"
+          % ("已改写（原文件存 .bak）" if args.apply else "待改",
+             changed, len(targets), "" if args.apply else "，确认无误后加 --apply"))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

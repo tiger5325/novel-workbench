@@ -30,10 +30,12 @@
 .
 ├─ web/                 # Web 阅读器 + 构建
 │  ├─ index.html        # 单页阅读器（总览 / 阅读 / 搜索 / 编辑）
+│  ├─ brand.json        # 书名 / 卷名 / 导航卡片（换书只改这里）
 │  ├─ data.js           # 由 build.py 打包的成品数据
 │  ├─ build.py          # 扫描正文 md → 生成 data.js
 │  ├─ server.py         # 本地服务（支持在线写回 .md）
-│  └─ serve_threaded.py
+│  └─ serve_threaded.py # 纯静态服务（多线程，只读）
+├─ docs/                # GitHub Pages 发布目录（构建时自动同步）
 ├─ novel-source/        # 示例作品 259 章 markdown（可整体替换）
 │  ├─ 卷一_龙潜于渊/
 │  ├─ 卷二_定鼎新朝/
@@ -42,11 +44,14 @@
 ├─ benchmark/           # 对标基准包（文风向量、拆解实例）
 ├─ 00-06*.md            # 流水线各阶段说明（题材 / 人物卡 / 文风 / 伏笔 / 质检 / 对标）
 ├─ qc_audit.py          # 确定性机检脚本
-├─ check_quotes.py      # 引号规范批检
-└─ batch_clean.py       # 批量清洗（引号 / 空白）
+├─ qc_rules.json        # 机检规则（字数区间 / 词表 / 套话表 / 文风带，换书只改这里）
+├─ check_quotes.py      # 引号规范批检（直接跑，扫 novel-source/）
+└─ batch_clean.py       # 格式清洗（默认预览，--apply 才落盘）
 ```
 
-> 正文源优先级：`NOVEL_PROJECT_ROOT/正文_精修版` → 工作台同级目录/穿越之我是杨广/正文_精修版 → 仓库自带 `novel-source/`。用环境变量 `NOVEL_PROJECT_ROOT` 可指向你自己的项目根，无需改代码。
+> 正文源优先级：`NOVEL_PROJECT_ROOT`（环境变量）→ 工作台自身或同级目录中带 `正文_精修版/` 的目录 → 仓库自带 `novel-source/`。构建与机检共用同一套解析逻辑，克隆后不改代码即可跑通。
+>
+> `web/data.js` 与 `docs/data.js` 是同一份数据的两个落点：前者供本地阅读器，后者是 Pages 的发布快照。构建时自动同步，内容没变则沿用上次时间戳，不会产生「只改了时间」的空 diff。
 
 ## 快速开始
 
@@ -69,9 +74,29 @@ python3 web/server.py    # 浏览器访问 http://127.0.0.1:8770
 **确定性质控机检**——
 ```bash
 python3 qc_audit.py
-python3 qc_audit.py --root ../我的项目      # 指定项目根（默认=脚本所在目录，无正文时回退 novel-source/）
+python3 qc_audit.py --root ../我的项目      # 指定项目根（只扫该目录，不向上探测）
+python3 qc_audit.py --rules my_qc_rules.json  # 换一套规则文件
 ```
 机检会写 `_工单与报告/机检报告/机检审校报告.md` 与状态文件；`--deep-seeded N` 用于声明已完成全维审校的章数，不传则沿用状态文件里的进度。
+
+**引号体检 / 格式清洗**——
+```bash
+python3 check_quotes.py                    # 扫 novel-source/，列出问题位置
+python3 batch_clean.py                      # 预览要改什么（不写盘）
+python3 batch_clean.py --apply               # 真改，每个文件先存 .bak
+```
+
+## 换成你自己的书
+
+只改三个地方，脚本一行都不用动：
+
+| 想改什么 | 改哪里 |
+|---|---|
+| 书名 / 卷名 / 首页文案 / 导航卡片 | `web/brand.json` |
+| 字数区间、违禁词、套话表、文风参考带 | `qc_rules.json` |
+| 正文 | 替换 `novel-source/` 里的章节文件（`NNN_章名.md`，任意卷目录名） |
+
+改完跑 `python3 web/build.py`，`data.js` 与 `docs/` 一起更新。
 
 ## 当前进度
 
@@ -79,7 +104,9 @@ python3 qc_audit.py --root ../我的项目      # 指定项目根（默认=脚�
 |---|---|
 | 正文 | 259 章 / 699,459 字（卷一 110 + 卷二 110 + 卷三 39） |
 | 细纲覆盖 | 60 章 |
-| 确定性机检 | 259 章：通过 231 / 未过 28 / 跨章重复 2 段（另有 259 章触发句式告警，阈值偏严，仅作提示） |
+| 确定性机检 | 259 章：通过 231 / 未过 28 / 跨章重复 2 段 / 有告警 165 章 |
+| 机检判定口径 | 字数 2600–3200 为标准区间，≤3520 只告警，>3520 判未过；违禁词、套话表、文风参考带全部外置在 `qc_rules.json` |
+| 文风密度观测 | 只出分布与偏离 Top-10，不参与未过判定（中位数整体落在参考带外时，说明是文风基底要调，不是挑章返工） |
 | 全维审校 | 独立手动 / 技能任务，逐批推进 |
 
 ## 技术栈
@@ -90,8 +117,12 @@ python3 qc_audit.py --root ../我的项目      # 指定项目根（默认=脚�
 
 ## 许可证
 
-- **代码与工具**（`web/build.py`、`web/server.py`、`qc_audit.py` 等脚本及阅读器前端）：**MIT**，见 [LICENSE](./LICENSE)。
-- **正文与创作内容**（`novel-source/` 下 259 章、`web/data.js` 中的正文、`projects/` 规划文档）：**版权归作者所有（All Rights Reserved）**，未经授权不得商用或转载。MIT 许可**不覆盖**这些创作内容。
+本仓库包含两类内容，授权范围不同，详见 [NOTICE.md](./NOTICE.md)：
+
+- **代码与工具**（`web/` 下的脚本与阅读器前端、`qc_audit.py`、`qc_rules.json` 等）：**MIT**，见 [LICENSE](./LICENSE)。
+- **创作内容**（`novel-source/` 下的正文章节、`data.js` 中的正文、`projects/` 规划文档、`benchmark/` 拆解）：**版权归作者所有（All Rights Reserved）**，未经授权不得商用、转载或改编。
+
+> MIT 正文保持完整、不追加限制条款——两类内容各归各的许可，避免同一份文件里自相矛盾。
 
 ## 免责声明
 

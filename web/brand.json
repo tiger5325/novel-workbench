@@ -1,0 +1,43 @@
+{
+  "_readme": [
+    "阅读器的品牌与导航配置。build.py 会把本文件内容塞进 data.brand，前端统一读它。",
+    "换书只改这里，不必改 web/index.html 源码。字段为空则前端回退通用默认值。",
+    "navDocs / platformDocs / quick 的 path 必须与 data.js 里的文件键一致；",
+    "留空数组则前端按 data.groups 自动取前若干项。"
+  ],
+
+  "workbench": "智能网文小说创作工作台",
+  "title": "穿越之我是杨广",
+  "tagline": "高阳毒士爽文",
+  "volume": "卷一 龙潜于渊",
+  "author": "tiger5325",
+
+  "intro": "示例作品：隋末穿越 · 高阳毒士爽文。工作台本身题材与文风不设限——题材锚定、人物卡、文风模板都可替换。流水线四段：规划→生产→质检→纪律。手机/电脑均可直接读正文。",
+  "heroTag": "示例：高阳毒士爽文 · 不拘正统 · 卷一 龙潜于渊",
+
+  "navLabel": "地基八档",
+  "navDocs": [
+    { "path": "projects/穿越之我是杨广/01_总纲.md", "label": "总纲", "sub": "最高纲领" },
+    { "path": "projects/穿越之我是杨广/06_十卷提纲表.md", "label": "十卷提纲", "sub": "卷一至卷十" },
+    { "path": "projects/穿越之我是杨广/07_逐章大纲_前30章.md", "label": "逐章大纲", "sub": "001–030" },
+    { "path": "projects/穿越之我是杨广/02_人物剧集库.md", "label": "人物剧集", "sub": "七阵营" },
+    { "path": "projects/穿越之我是杨广/11_谋略体系库.md", "label": "谋略体系", "sub": "谋略五拍" },
+    { "path": "projects/穿越之我是杨广/04_写作规范.md", "label": "写作规范", "sub": "硬闸口径" }
+  ],
+
+  "platformDocs": [
+    { "path": "README.md", "label": "平台 README" },
+    { "path": "00-流水线总览与路由.md", "label": "流水线总览" },
+    { "path": "06-顶流对标·范文提炼与拆解.md", "label": "顶流对标" },
+    { "path": "benchmark/文风向量_最强毒士_高阳.md", "label": "文风向量（示例）" }
+  ],
+
+  "quick": [
+    { "href": "#/manuscript", "label": "正文阅读", "desc": "已写章节 · 点读" },
+    { "href": "#/chapters", "label": "章节看板", "desc": "逐章细纲 · 可标状态" },
+    { "path": "projects/穿越之我是杨广/01_总纲.md", "label": "总纲", "desc": "最高纲领 · 七矛盾轴" },
+    { "path": "projects/穿越之我是杨广/06_十卷提纲表.md", "label": "十卷提纲", "desc": "卷一至卷十 · 骨架" },
+    { "path": "projects/穿越之我是杨广/02_人物剧集库.md", "label": "人物剧集库", "desc": "七阵营人物弧线" },
+    { "path": "projects/穿越之我是杨广/04_写作规范.md", "label": "写作规范", "desc": "开局铁闸 · 硬闸口径" }
+  ]
+}
