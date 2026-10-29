@@ -442,13 +442,19 @@ a:hover{text-decoration:underline}
   .board-wrap .tbl-wrap.plain{display:block}
   .ccards{display:none !important}
 }
+
+/* 样章标记：docs/ 发布版的 data.js 只含正文前 N 章，这里给访客一个明确提示 */
+.sample-tag{margin-left:8px;padding:1px 8px;border-radius:999px;font-size:11px;line-height:1.7;
+  white-space:nowrap;background:rgba(196,148,52,.14);color:#9a6f18;border:1px solid rgba(196,148,52,.38)}
+html[data-theme="dark"] .sample-tag{background:rgba(224,178,92,.16);color:#e0b25c;border-color:rgba(224,178,92,.34)}
+@media (max-width:560px){.sample-tag{display:none}}
 </style>
 </head>
 <body>
 <div class="app">
   <header class="appbar" id="appbar">
     <button class="iconbtn menu-btn" id="menuBtn" title="目录">☰</button>
-    <div class="brand"><b id="brandName">网文创作工作台</b><span id="brandSub">阅读与创作台</span></div>
+    <div class="brand"><b id="brandName">网文创作工作台</b><span id="brandSub">阅读与创作台</span><span class="sample-tag" id="sampleTag" hidden></span></div>
     <span class="spacer"></span>
     <span class="acount" id="acount"></span>
     <div class="asearch"><input id="q" placeholder="全站搜索…" autocomplete="off"></div>
@@ -1339,6 +1345,18 @@ function startWatch(){
   setInterval(tick,8000);
 }
 
+/* 样章标记：build.py 给 docs/ 发布版的 data.js 打了 sample 字段，有就亮提示，
+   免得访客把「只剩 10 章」当成作品没写完。本地全量版无此字段，不显示。 */
+function markSample(){
+  const el=document.getElementById('sampleTag');
+  if(!el) return;
+  const s=(D&&D.sample)||null;
+  if(!s||!s.limit||!s.chapterCount) return;
+  el.textContent='样章 '+s.chapterCount+' 章';
+  el.title='本页是公开发布版，仅收录正文前 '+s.chapterCount+' 章；全稿未公开。';
+  el.hidden=false;
+}
+
 async function probeServer(){
   try{
     if(location.protocol==='file:') return false;
@@ -1352,6 +1370,7 @@ function boot(){
   applyTheme();
   overrides=loadOverrides();
   syncHeader();
+  markSample();
 
   const themeBtn=document.getElementById('themeBtn');
   if(themeBtn) themeBtn.onclick=toggleTheme;
